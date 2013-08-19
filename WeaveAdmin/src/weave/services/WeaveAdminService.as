@@ -486,9 +486,18 @@ package weave.services
 		{
 			return invokeAdminWithLogin(checkKeyColumnForSQLImport, arguments);
 		}
+		public function checkKeyColumnForSQLImportWithFilteredColumns(schemaName:String, tableName:String, keyColumnName:String, filteredColumns:Array):AsyncToken
+		{
+			return invokeAdminWithLogin(checkKeyColumnForSQLImportWithFilteredColumns, arguments);
+		}
+			
 		public function checkKeyColumnForCSVImport(csvFileName:String, keyColumnName:String, secondaryKeyColumnName:String):AsyncToken
 		{
 			return invokeAdmin(checkKeyColumnForCSVImport,arguments);
+		}
+		public function checkKeyColumnForCSVImportWithFilteredColumns(csvFileName:String, keyColumnName:String, filteredColumns:Array):AsyncToken
+		{
+			return invokeAdmin(checkKeyColumnForCSVImportWithFilteredColumns,arguments);
 		}
 		public function checkKeyColumnForDBFImport(dbfFileNames:Array, keyColumnNames:Array):DelayedAsyncInvocation
 		{
