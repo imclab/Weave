@@ -29,6 +29,7 @@ package weave.services
 	import weave.api.data.DataTypes;
 	import weave.services.beans.DatabaseConfigInfo;
 	import weave.services.beans.EntityHierarchyInfo;
+	import weave.services.beans.EntityType;
 
 	public class Admin
 	{
@@ -90,6 +91,7 @@ package weave.services
 		[Bindable] public var weaveFileNames:Array = [];
 		[Bindable] public var privateWeaveFileNames:Array = [];
 		[Bindable] public var keyTypes:Array = [];
+		[Bindable] private var entityTypes:Array = [EntityType.TABLE, EntityType.COLUMN, EntityType.HIERARCHY, EntityType.CATEGORY];
 		[Bindable] private var dataTypes:Array = [];
 		[Bindable] public var databaseConfigInfo:DatabaseConfigInfo = new DatabaseConfigInfo(null);
 		
@@ -310,12 +312,12 @@ package weave.services
 			service.addHook(
 				service.newEntity,
 				null,
-				function(event:ResultEvent, user0_pass1_type2_meta3_parent4_index5:Array):void
+				function(event:ResultEvent, user0_pass1_meta2_parent3_index4:Array):void
 				{
 					var id:int = int(event.result);
 					focusEntityId = id;
 					entityCache.invalidate(id);
-					var parentId:int = user0_pass1_type2_meta3_parent4_index5[4];
+					var parentId:int = user0_pass1_meta2_parent3_index4[3];
 					entityCache.invalidate(parentId);
 				}
 			);
@@ -424,6 +426,9 @@ package weave.services
 			{
 				case 'connection':
 					return connectionNames;
+					
+				case ColumnMetadata.ENTITY_TYPE:
+					return entityTypes;
 				
 				case ColumnMetadata.DATA_TYPE:
 					return dataTypes;

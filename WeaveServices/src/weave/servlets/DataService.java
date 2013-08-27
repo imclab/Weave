@@ -58,6 +58,7 @@ import weave.config.DataConfig.DataEntityMetadata;
 import weave.config.DataConfig.DataEntityWithChildren;
 import weave.config.DataConfig.DataType;
 import weave.config.DataConfig.EntityHierarchyInfo;
+import weave.config.DataConfig.EntityType;
 import weave.config.DataConfig.PrivateMetadata;
 import weave.config.DataConfig.PublicMetadata;
 import weave.config.WeaveContextParams;
@@ -131,21 +132,22 @@ public class DataService extends GenericServlet
 	private DataEntity getColumnEntity(int columnId) throws RemoteException
 	{
 		DataEntity entity = getDataConfig().getEntity(columnId);
-		if (entity == null || entity.type != DataEntity.TYPE_COLUMN)
+		
+		if (entity == null)
 			throw new RemoteException("No column with id " + columnId);
+		
+		String entityType = entity.publicMetadata.get(PublicMetadata.ENTITYTYPE);
+		if (!Strings.equal(entityType, EntityType.COLUMN))
+			throw new RemoteException(String.format("Entity with id=%s is not a column (entityType: %s)", columnId, entityType));
+		
 		return entity;
-	}
-	
-	private static boolean isEmpty(String str)
-	{
-		return str == null || str.length() == 0;
 	}
 	
 	private void assertColumnHasPrivateMetadata(DataEntity columnEntity, String ... fields) throws RemoteException
 	{
 		for (String field : fields)
 		{
-			if (isEmpty(columnEntity.privateMetadata.get(field)))
+			if (Strings.isEmpty(columnEntity.privateMetadata.get(field)))
 			{
 				String dataType = columnEntity.publicMetadata.get(PublicMetadata.DATATYPE);
 				String description = (dataType != null && dataType.equals(DataType.GEOMETRY)) ? "Geometry column" : "Column";
@@ -177,7 +179,7 @@ public class DataService extends GenericServlet
 	
 	public EntityHierarchyInfo[] getDataTableList() throws RemoteException
 	{
-		return getDataConfig().getEntityHierarchyInfo(DataEntity.TYPE_DATATABLE);
+		return getDataConfig().getEntityHierarchyInfo(EntityType.TABLE);
 	}
 
 	public int[] getEntityChildIds(int parentId) throws RemoteException
@@ -185,11 +187,11 @@ public class DataService extends GenericServlet
 		return ListUtils.toIntArray( getDataConfig().getChildIds(parentId) );
 	}
 
-	public int[] getEntityIdsByMetadata(Map<String,String> publicMetadata, int entityType) throws RemoteException
+	public int[] getEntityIdsByMetadata(Map<String,String> publicMetadata) throws RemoteException
 	{
 		DataEntityMetadata dem = new DataEntityMetadata();
 		dem.publicMetadata = publicMetadata;
-		return ListUtils.toIntArray( getDataConfig().getEntityIdsByMetadata(dem, entityType) );
+		return ListUtils.toIntArray( getDataConfig().getEntityIdsByMetadata(dem) );
 	}
 
 	public DataEntity[] getEntitiesById(int[] ids) throws RemoteException
@@ -305,7 +307,7 @@ public class DataService extends GenericServlet
 			
 			// if dataType is defined in the config file, use that value.
 			// otherwise, derive it from the sql result.
-			if (isEmpty(dataType))
+			if (Strings.isEmpty(dataType))
 			{
 				dataType = DataType.fromSQLType(result.columnTypes[1]);
 				entity.publicMetadata.put(PublicMetadata.DATATYPE, dataType); // fill in missing metadata for the client
@@ -501,8 +503,11 @@ public class DataService extends GenericServlet
 		DataConfig dataConfig = getDataConfig();
 		
 		DataEntityMetadata params = new DataEntityMetadata();
-		params.publicMetadata.put(PublicMetadata.KEYTYPE,keyType);
-		List<Integer> columnIds = new ArrayList<Integer>( dataConfig.getEntityIdsByMetadata(params, DataEntity.TYPE_COLUMN) );
+		params.setPublicMetadata(
+				PublicMetadata.ENTITYTYPE, EntityType.COLUMN,
+				PublicMetadata.KEYTYPE, keyType
+			);
+		List<Integer> columnIds = new ArrayList<Integer>( dataConfig.getEntityIdsByMetadata(params) );
 
 		if (columnIds.size() > 100)
 			columnIds = columnIds.subList(0, 100);
@@ -697,7 +702,7 @@ public class DataService extends GenericServlet
 					//timer.lap("get row set");
 					// if dataType is defined in the config file, use that value.
 					// otherwise, derive it from the sql result.
-					if (isEmpty(dataType))
+					if (Strings.isEmpty(dataType))
 						dataType = DataType.fromSQLType(sqlResult.columnTypes[1]);
 					boolean isNumeric = dataType != null && dataType.equalsIgnoreCase(DataType.NUMBER);
 					
@@ -871,6 +876,7 @@ public class DataService extends GenericServlet
 		
 		DataEntityMetadata query = new DataEntityMetadata();
 		query.publicMetadata = metadata;
+		query.setPublicMetadata(PublicMetadata.ENTITYTYPE, EntityType.COLUMN);
 		
 		final String DATATABLE = "dataTable";
 		final String NAME = "name";
@@ -884,7 +890,7 @@ public class DataService extends GenericServlet
 		
 		DataConfig dataConfig = getDataConfig();
 		
-		Collection<Integer> ids = dataConfig.getEntityIdsByMetadata(query, DataEntity.TYPE_COLUMN);
+		Collection<Integer> ids = dataConfig.getEntityIdsByMetadata(query);
 		
 		// attempt recovery for backwards compatibility
 		if (ids.size() == 0)
@@ -894,6 +900,7 @@ public class DataService extends GenericServlet
 			{
 				// try to find columns sqlTable==dataTable and sqlColumn=name
 				DataEntityMetadata sqlInfoQuery = new DataEntityMetadata();
+				sqlInfoQuery.setPublicMetadata(PublicMetadata.ENTITYTYPE, EntityType.COLUMN);
 				String sqlTable = metadata.get(DATATABLE);
 				String sqlColumn = metadata.get(NAME);
 				for (int i = 0; i < 2; i++)
@@ -904,7 +911,7 @@ public class DataService extends GenericServlet
 						PrivateMetadata.SQLTABLE, sqlTable,
 						PrivateMetadata.SQLCOLUMN, sqlColumn
 					);
-					ids = dataConfig.getEntityIdsByMetadata(sqlInfoQuery, DataEntity.TYPE_COLUMN);
+					ids = dataConfig.getEntityIdsByMetadata(sqlInfoQuery);
 					if (ids.size() > 0)
 						break;
 				}
@@ -912,7 +919,7 @@ public class DataService extends GenericServlet
 			else if (metadata.containsKey(NAME) && dataType != null && dataType.equals(DataType.GEOMETRY))
 			{
 				metadata.put(PublicMetadata.TITLE, metadata.remove(NAME));
-				ids = dataConfig.getEntityIdsByMetadata(query, DataEntity.TYPE_COLUMN);
+				ids = dataConfig.getEntityIdsByMetadata(query);
 			}
 			if (ids.size() == 0)
 				throw new RemoteException("No column matches metadata query: " + metadata);

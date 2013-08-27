@@ -22,13 +22,15 @@ package weave.services.beans
 	public class EntityHierarchyInfo
 	{
 		public var id:int;
-		public var type:int;
+		public var entityType:String;
 		public var title:String;
 		public var numChildren:int;
 		
-		public function EntityHierarchyInfo(obj:Object, entityType:int)
+		/**
+		 * @param obj An object with the same properties as EntityHierarchyInfo.
+		 */		
+		public function EntityHierarchyInfo(obj:Object)
 		{
-			type = entityType;
 			for (var name:String in obj)
 				if (this.hasOwnProperty(name))
 					this[name] = obj[name];
@@ -37,17 +39,16 @@ package weave.services.beans
 		public function getLabel(debug:Boolean = false):String
 		{
 			var branchInfo:EntityHierarchyInfo = this;
-			var typeStr:String = EntityType.getTypeString(type) || lang('Entity');
-			var tableTitle:String = branchInfo.title || lang("Untitled {0}#{1}", typeStr, branchInfo.id);
+			var tableTitle:String = branchInfo.title || lang("Untitled {0}#{1}", entityType, branchInfo.id);
 			
 			// this is a table node, so avoid calling getEntity()
 			var str:String = tableTitle;
 			
-			if (type == EntityType.TABLE)
+			if (entityType == EntityType.TABLE)
 				str = lang("{0} ({1})", str, branchInfo.numChildren);
 			
 			if (debug)
-				str = lang("({0}#{1}) {2}", typeStr, branchInfo.id, str);
+				str = lang("({0}#{1}) {2}", entityType, branchInfo.id, str);
 			
 			return str;
 		}

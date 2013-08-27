@@ -19,22 +19,23 @@
 
 package weave.services.beans
 {
+	import weave.api.data.ColumnMetadata;
+
 	/**
 	 * @author adufilie
 	 */
 	public class Entity extends EntityMetadata
 	{
 		private var _id:int;
-		private var _type:int;
 		private var _childIds:Array;
 		
 		public function get id():int
 		{
 			return _id;
 		}
-		public function get type():int
+		public function getEntityType():String
 		{
-			return _type;
+			return publicMetadata[ColumnMetadata.ENTITY_TYPE];
 		}
 		public function get childIds():Array
 		{
@@ -44,12 +45,6 @@ package weave.services.beans
 		public function Entity()
 		{
 			_id = -1;
-			_type = EntityType.ANY;
-		}
-		
-		public function getTypeString():String
-		{
-			return EntityType.getTypeString(_type);
 		}
 		
 		public static function getEntityIdFromResult(result:Object):int
@@ -60,7 +55,6 @@ package weave.services.beans
 		public function copyFromResult(result:Object):void
 		{
 			_id = getEntityIdFromResult(result);
-			_type = result.type;
 			privateMetadata = result.privateMetadata || {};
 			publicMetadata = result.publicMetadata || {};
 			_childIds = result.childIds;

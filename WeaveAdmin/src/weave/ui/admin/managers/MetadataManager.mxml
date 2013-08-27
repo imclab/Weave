@@ -55,7 +55,6 @@
 	
 	import weave.core.UIUtils;
 	import weave.services.Admin;
-	import weave.services.beans.Entity;
 	import weave.services.beans.EntityType;
 	import weave.ui.EntityNode;
 	import weave.ui.EntityTree;
@@ -114,16 +113,21 @@
     {
 		var foundTable:Boolean = false;
 		var foundColumn:Boolean = false;
+		var foundOther:Boolean = false;
 		for each (var item:Object in tableTree.selectedItems)
 		{
-			var entity:Entity = (item as EntityNode).getEntity();
-			if (entity.type == EntityType.TABLE)
+			var entityType:String = (item as EntityNode).getEntity().getEntityType();
+			if (entityType == EntityType.TABLE)
 				foundTable = true;
-			else if (entity.type == EntityType.COLUMN)
+			else if (entityType == EntityType.COLUMN)
 				foundColumn = true;
+			else
+				foundOther = true;
 		}
 		var typeStr:String = lang("tables and columns");
-		if (foundTable != foundColumn)
+		if (foundOther)
+			typeStr = lang("items");
+		else if (foundTable != foundColumn)
 			typeStr = foundTable ? lang("tables") : lang("columns");
 			
         PopUpUtils.confirm(
@@ -161,7 +165,7 @@
         
 		var index:int = -1;
 		// if user selected a column, use its parent node and insert at the column's position
-		if (node.getEntity().type == EntityType.COLUMN)
+		if (node.getEntity().getEntityType() == EntityType.COLUMN)
 		{
 			var parent:EntityNode = hierarchyTree.getParentItem(node);
 			index = parent.getEntity().childIds.indexOf(node.id);
@@ -190,7 +194,7 @@
     {
 		for each (var item:EntityNode in hierarchyTree.selectedItems)
 		{
-			if (item.getEntity().type == EntityType.HIERARCHY)
+			if (item.getEntity().getEntityType() == EntityType.HIERARCHY)
 			{
 	            PopUpUtils.confirm(
 					this,
@@ -210,13 +214,12 @@
 	{
 		for each (var item:EntityNode in hierarchyTree.selectedItems)
 		{
-	        var type:int = item.getEntity().type;
 	        var parent:EntityNode = hierarchyTree.getParentItem(item);
 	        if (parent)
 	        {
 				Admin.entityCache.remove_child(parent.id, item.id);
 	        }
-	        else if (type == EntityType.HIERARCHY)
+	        else if (item.getEntity().getEntityType() == EntityType.HIERARCHY)
 	        {
 				Admin.entityCache.delete_entity(item.id);
 	        }

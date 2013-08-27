@@ -22,9 +22,9 @@
 			
 			private var cacheJuggler:CallbackJuggler = new CallbackJuggler(this, EventUtils.generateDelayedCallback(this, refresh, 100), false);
 			
-			public function set rootFilterType(type:int):void
+			public function set rootFilterType(entityType:String):void
 			{
-				dataProvider = _rootNode = new EntityNode(type);
+				dataProvider = _rootNode = new EntityNode(entityType);
 				dataDescriptor = new EntityTreeDataDescriptor();
 				nodeFilterFunction = _nodeFilterFunction;
 			}

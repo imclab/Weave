@@ -19,19 +19,19 @@ package weave.services
     {
 		public static const ROOT_ID:int = -1;
 		
-		private var cache_dirty:Object = {}; // id -> Boolean
-        private var cache_entity:Object = {}; // id -> Array <Entity>
+		private var idsToFetch:Object = {}; // id -> Boolean
+        private var entityCache:Object = {}; // id -> Array <Entity>
 		private var d2d_child_parent:Dictionary2D = new Dictionary2D(); // <child_id,parent_id> -> Boolean
-		private var delete_later:Object = {}; // id -> Boolean
+		private var idsToDelete:Object = {}; // id -> Boolean
 		private var _idsByType:Object = {}; // entityType -> Array of id
 		private var _infoLookup:Object = {}; // id -> EntityHierarchyInfo
-		private var pending_invalidate:Object = {}; // id -> Boolean; used to remember which ids to invalidate the next time the entity is requested
+		private var idsDirty:Object = {}; // id -> Boolean; used to remember which ids to invalidate the next time the entity is requested
 		
         public function EntityCache()
         {
-			callbacks.addGroupedCallback(this, fetchDirtyEntities);
+			callbacks.addGroupedCallback(this, groupedCallback);
 			registerLinkableChild(this, Admin.service);
-			Admin.service.addHook(Admin.service.authenticate, null, fetchDirtyEntities);
+			Admin.service.addHook(Admin.service.authenticate, null, groupedCallback);
         }
 		
 		public function getCachedParentIds(id:int):Array
@@ -47,16 +47,17 @@ package weave.services
 		{
 			callbacks.delayCallbacks();
 			
-			if (!cache_dirty[id])
+			// trigger callbacks if we haven't previously decided to fetch this id
+			if (!idsToFetch[id])
 				callbacks.triggerCallbacks();
 			
-			pending_invalidate[id] = false;
-			cache_dirty[id] = true;
+			idsDirty[id] = false;
+			idsToFetch[id] = true;
 			
-			if (!cache_entity[id])
+			if (!entityCache[id])
 			{
 				var entity:Entity = new Entity();
-				cache_entity[id] = entity;
+				entityCache[id] = entity;
 			}
 			
 			if (alsoInvalidateParents)
@@ -83,13 +84,18 @@ package weave.services
 		public function getEntity(id:int):Entity
 		{
 			// if there is no cached value, call invalidate() to create a placeholder.
-			if (!cache_entity[id] || pending_invalidate[id])
+			if (!entityCache[id] || idsDirty[id])
 				invalidate(id);
 			
-            return cache_entity[id];
+            return entityCache[id] as Entity;
 		}
 		
-		private function fetchDirtyEntities(..._):void
+		public function entityIsCached(id:int):Boolean
+		{
+			return entityCache[id] is Entity;
+		}
+		
+		private function groupedCallback(..._):void
 		{
 			if (!Admin.instance.userHasAuthenticated)
 				return;
@@ -99,23 +105,23 @@ package weave.services
 			// delete marked entities
 			var deleted:Boolean = false;
 			var idsToRemove:Array = [];
-			for (id in delete_later)
+			for (id in idsToDelete)
 				idsToRemove.push(id);
 			
 			if (idsToRemove.length)
 			{
 				addAsyncResponder(Admin.service.removeEntities(idsToRemove), handleRemoveEntities);
-				delete_later = {};
+				idsToDelete = {};
 			}
 			
 			// request invalidated entities
 			var ids:Array = [];
-			for (id in cache_dirty)
+			for (id in idsToFetch)
 			{
 				// when requesting root, also request data table list
 				if (id == ROOT_ID)
 				{
-					delete cache_dirty[id];
+					delete idsToFetch[id];
 					addAsyncResponder(Admin.service.getEntityHierarchyInfo(EntityType.TABLE), handleEntityHierarchyInfo, null, EntityType.TABLE);
 					addAsyncResponder(Admin.service.getEntityHierarchyInfo(EntityType.HIERARCHY), handleEntityHierarchyInfo, null, EntityType.HIERARCHY);
 				}
@@ -124,7 +130,7 @@ package weave.services
 			}
 			if (ids.length > 0)
 			{
-				cache_dirty = {};
+				idsToFetch = {};
 				addAsyncResponder(Admin.service.getEntitiesById(ids), getEntityHandler, null, ids);
 			}
         }
@@ -143,22 +149,22 @@ package weave.services
         {
 			var id:int;
 			
-			// mark all requested ids as pending_invalidate in case they do not appear in the results
+			// mark all requested ids as dirty in case they do not appear in the results
 			for each (id in requestedIds)
-				pending_invalidate[id] = true;
+				idsDirty[id] = true;
 				
 			for each (var result:Object in event.result)
 			{
 				id = Entity.getEntityIdFromResult(result);
-				var entity:Entity = cache_entity[id] || new Entity();
+				var entity:Entity = entityCache[id] || new Entity();
 				entity.copyFromResult(result);
-	            cache_entity[id] = entity;
-				pending_invalidate[id] = false;
+	            entityCache[id] = entity;
+				idsDirty[id] = false;
 				
 				var info:EntityHierarchyInfo = _infoLookup[id];
 				if (info)
 				{
-					info.type = entity.type;
+					info.entityType = entity.publicMetadata[ColumnMetadata.ENTITY_TYPE];
 					info.title = entity.publicMetadata[ColumnMetadata.TITLE];
 					info.numChildren = entity.childIds.length;
 				}
@@ -171,21 +177,22 @@ package weave.services
 			callbacks.triggerCallbacks();
         }
 		
-		private function handleEntityHierarchyInfo(event:ResultEvent, entityType:int):void
+		private function handleEntityHierarchyInfo(event:ResultEvent, entityType:String):void
 		{
 			var items:Array = event.result as Array;
 			for (var i:int = 0; i < items.length; i++)
 			{
-				var item:EntityHierarchyInfo = new EntityHierarchyInfo(items[i], entityType);
-				_infoLookup[item.id] = item;
-				items[i] = item.id; // overwrite item with its id
+				items[i]['entityType'] = entityType;
+				var item:EntityHierarchyInfo = new EntityHierarchyInfo(items[i]);
+				_infoLookup[item['id']] = item;
+				items[i] = item['id']; // overwrite item with its id
 			}
 			_idsByType[entityType] = items; // now an array of ids
 			
 			callbacks.triggerCallbacks();
 		}
 		
-		public function getIdsByType(entityType:int):Array
+		public function getIdsByType(entityType:String):Array
 		{
 			getEntity(ROOT_ID);
 			return _idsByType[entityType] = (_idsByType[entityType] || []);
@@ -203,19 +210,19 @@ package weave.services
 			
 			if (purge)
 			{
-				cache_dirty = {};
-				cache_entity = {};
+				idsToFetch = {};
+				entityCache = {};
 				d2d_child_parent = new Dictionary2D();
-				delete_later = {};
+				idsToDelete = {};
 				_idsByType = {};
 				_infoLookup = {};
-				pending_invalidate = {};
+				idsDirty = {};
 			}
 			else
 			{
 				// we don't want to delete the cache because we can still use the cached values for display in the meantime.
-				for (var id:* in cache_entity)
-					pending_invalidate[id] = true;
+				for (var id:* in entityCache)
+					idsDirty[id] = true;
 			}
 			callbacks.triggerCallbacks();
 			
@@ -227,26 +234,26 @@ package weave.services
 			Admin.service.updateEntity(id, diff);
 			invalidate(id);
         }
-        public function add_category(label:String, parentId:int, index:int):void
+        public function add_category(title:String, parentId:int, index:int):void
         {
-			var type:int = parentId == ROOT_ID ? EntityType.HIERARCHY : EntityType.CATEGORY;
+			var entityType:String = parentId == ROOT_ID ? EntityType.HIERARCHY : EntityType.CATEGORY;
             var em:EntityMetadata = new EntityMetadata();
-			em.publicMetadata[ColumnMetadata.TITLE] = label;
-			Admin.service.newEntity(type, em, parentId, index);
+			em.publicMetadata[ColumnMetadata.TITLE] = title;
+			em.publicMetadata[ColumnMetadata.ENTITY_TYPE] = entityType;
+			Admin.service.newEntity(em, parentId, index);
 			invalidate(parentId);
         }
         public function delete_entity(id:int):void
         {
-            /* Entity deletion should usually impact root, so we'll invalidate root's cache entry and refetch. */
-			delete_later[id] = true;
+			idsToDelete[id] = true;
 			invalidate(id, true);
         }
         public function add_child(parent_id:int, child_id:int, index:int):void
         {
-			if (parent_id == ROOT_ID && delete_later[child_id])
+			if (parent_id == ROOT_ID && idsToDelete[child_id])
 			{
 				// prevent hierarchy-dragged-to-root from removing the hierarchy
-				delete delete_later[child_id];
+				delete idsToDelete[child_id];
 				return;
 			}
 			Admin.service.addParentChildRelationship(parent_id, child_id, index);
@@ -257,7 +264,7 @@ package weave.services
 			// remove from root not supported, but invalidate root anyway in case the child is added via add_child later
 			if (parent_id == ROOT_ID)
 			{
-				delete_later[child_id] = true;
+				idsToDelete[child_id] = true;
 				invalidate(ROOT_ID);
 			}
 			else
