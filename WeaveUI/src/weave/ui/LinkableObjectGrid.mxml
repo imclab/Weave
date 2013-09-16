@@ -27,14 +27,18 @@ LinkableObjectGrid
 -->
 
 <mx:DataGrid xmlns="weave.ui.*" xmlns:mx="http://www.adobe.com/2006/mxml" 
+		 dragEnabled="true"
+		 dropEnabled="true"
+		 dragMoveEnabled="true"
+		 allowMultipleSelection="true"
+		 showDataTips="false"
 		 width="100%" minWidth="0"
-		 backgroundAlpha="0.5" borderStyle="inset"
 		 editable="true"
 		 itemEditEnd="variableNameChangeHandler(event)"
 		 >
 	<mx:columns>		
-		<mx:DataGridColumn id="nameCol" headerText="{lang('Edit variable name:')}" labelFunction="nameFunction" editable="true"/>
-		<mx:DataGridColumn headerText="{lang('Variable value')}" labelFunction="setLabel" editable="false"/>
+		<mx:DataGridColumn id="nameColumn" headerText="{lang('Edit variable name:')}" labelFunction="getObjectName" editable="true"/>
+		<mx:DataGridColumn headerText="{lang('Variable value')}" labelFunction="getItemLabel" editable="false"/>
 	</mx:columns>
 	
 	
@@ -43,79 +47,60 @@ LinkableObjectGrid
 			import mx.collections.ArrayCollection;
 			import mx.collections.ICollectionView;
 			import mx.controls.dataGridClasses.DataGridColumn;
+			import mx.core.IUIComponent;
 			import mx.events.DataGridEvent;
+			import mx.events.DragEvent;
+			import mx.managers.DragManager;
 			import mx.utils.StringUtil;
 			
-			import weave.api.WeaveAPI;
 			import weave.api.core.ILinkableDynamicObject;
 			import weave.api.core.ILinkableHashMap;
 			import weave.api.core.ILinkableObject;
 			import weave.api.data.IAttributeColumn;
-			import weave.api.getCallbackCollection;
-			import weave.core.SessionManager;
+			import weave.core.CallbackJuggler;
 			import weave.utils.ColumnUtils;
 						
-			// This is a pointer to an existing object map.  Do not create a new private one. 
-			private var _hashMap:ILinkableHashMap = null; // <- do not create a new object map						
+			private const _hashMapJuggler:CallbackJuggler = new CallbackJuggler(this, refreshLabels, true);
+			private const _dynamicObjectJuggler:CallbackJuggler = new CallbackJuggler(this, updateDataProvider, true);
+			private const _childListJuggler:CallbackJuggler = new CallbackJuggler(this, updateDataProvider, true);
 			
-			[Inspectable] public function set hashMap(value:ILinkableHashMap):void
-			{
-				if (_hashMap == value)
-					return;
-				// remove callback from previous object map
-				if (_hashMap != null)
-					getCallbackCollection(_hashMap).removeCallback(updateDataProvider);
-					
-				if (value != null)
-					dynamicObject = null;
-
-				// add callback to new object map	
-				_hashMap = value;
-				if (_hashMap != null)
-					getCallbackCollection(_hashMap).addGroupedCallback(this, updateDataProvider);
-				
-				updateDataProvider();
-			}
 			public function get hashMap():ILinkableHashMap
 			{
-				if (_hashMap && (WeaveAPI.SessionManager as SessionManager).objectWasDisposed(_hashMap))
-				{
-					hashMap = null;
-				}
+				return _hashMapJuggler.target as ILinkableHashMap;
+			}
+			public function set hashMap(value:ILinkableHashMap):void
+			{
+				if (value)
+					dynamicObject = null;
 				
-				return _hashMap;
+				_hashMapJuggler.target = value;
+				_childListJuggler.target = value && value.childListCallbacks;
+				nameColumn.editable = value != null;
 			}
 			
-			private var _dynamicObject:ILinkableDynamicObject = null;
 			public function get dynamicObject():ILinkableDynamicObject
 			{
-				if (_dynamicObject && (WeaveAPI.SessionManager as SessionManager).objectWasDisposed(_dynamicObject))
+				return _dynamicObjectJuggler.target as ILinkableDynamicObject;
+			}
+			public function set dynamicObject(value:ILinkableDynamicObject):void
+			{
+				if (value)
 				{
-					dynamicObject = null;
+					hashMap = null;
+					rowCount = 1;
 				}
 				
-				return _dynamicObject;
+				_dynamicObjectJuggler.target = value;
 			}
-			[Inspectable] public function set dynamicObject(value:ILinkableDynamicObject):void
+			
+			private function refreshLabels():void
 			{
-				if (_dynamicObject == value)
+				if (!stage)
+				{
+					callLater(refreshLabels);
 					return;
-				// remove callback from previous object map
-				if (_dynamicObject != null)
-					getCallbackCollection(_dynamicObject).addGroupedCallback(this, updateDataProvider);
-				
-				if (value != null)
-					hashMap = null;
-				
-				// add callback to new object map	
-				_dynamicObject = value;
-				if (_dynamicObject != null)
-					getCallbackCollection(_dynamicObject).addGroupedCallback(this, updateDataProvider);
-				
-				updateDataProvider();
-				
-				this.rowCount = 1;
-				//this.maxHeight = 10;
+				}
+				labelFunction = labelFunction; // this refreshes the labels
 			}
 			
 			private function updateDataProvider():void
@@ -165,10 +150,7 @@ LinkableObjectGrid
 				}
 			}
 			
-			
-			
-			// generates a label for an item in the list
-			public function setLabel(item:Object, column:DataGridColumn):String
+			public function getItemLabel(item:Object, ..._):String
 			{
 				var label:String = "";
 				
@@ -183,23 +165,20 @@ LinkableObjectGrid
 					var title:String = ColumnUtils.getTitle(col);
 					var keyType:String = ColumnUtils.getKeyType(col);
 					var dataType:String = ColumnUtils.getDataType(col);
-					if (!dataType)
+					
+					if (dataType && keyType)
+						return StringUtil.substitute("{0} ({1} -> {2})", title, keyType, dataType);
+					if (keyType)
 						return StringUtil.substitute("{0} (Key Type: {1})", title, keyType);
-					return StringUtil.substitute("{0} ({1} -> {2})", title, keyType, dataType);
+					if (dataType)
+						return StringUtil.substitute("{0} (Data Type: {1})", title, dataType);
+					
+					return title;
 				}
-				else
-				{
-					return label;
-				}
+				
+				return label;
 			}
 			
-			// generates a tooltip for an item in the list
-			/* private function setToolTip(item:Object):String
-			{
-				return setLabel(item);
-			} */
-			
-			// this function updates the sessioned name order based on what is in the data provider
 			private function updateHashMapNameOrder():void
 			{
 				validateNow();
@@ -217,7 +196,7 @@ LinkableObjectGrid
 					hashMap.setNameOrder(newNameOrder);
 				}
 			}
-			// this function removes anything from the session state not appearing in the data provider
+			
 			private function removeObjectsMissingFromDataProvider():void
 			{
 				if (hashMap)
@@ -236,27 +215,122 @@ LinkableObjectGrid
 				}
 			}
 			
+			// called when something is being dragged on top of this list
+			override protected function dragOverHandler(event:DragEvent):void
+			{
+				super.dragOverHandler(event);
+				
+				DragManager.showFeedback(DragManager.MOVE);
+			}
+			
+			// called when something is dropped into this list
+			override protected function dragDropHandler(event:DragEvent):void
+			{			
+				//need to add re-order functionality				
+				//if(event.dragInitiator == this)
+				//super.dragDropHandler(event);
+				
+				//hides the drop visual lines
+				event.currentTarget.hideDropFeedback(event);
+				mx_internal::resetDragScrolling(); // if we don't do this, list will scroll when mouse moves even when not dragging something
+				
+				if(event.dragInitiator == this)
+				{
+					event.action = DragManager.MOVE;
+					super.dragDropHandler(event);
+					
+					updateHashMapNameOrder();
+				}
+				else
+				{
+					var object:ILinkableObject;
+					var items:Array = event.dragSource.dataForFormat("items") as Array;
+					if (hashMap)
+					{
+						var prevNames:Array = hashMap.getNames();
+						var newNames:Array = [];
+						var dropIndex:int = calculateDropIndex(event);
+						
+						// copy each item in the list, in order
+						for (var i:int = 0; i < items.length; i++)
+						{
+							object = items[i] as ILinkableObject;
+							if (hashMap.getName(object) == null)
+							{
+								var newObject:ILinkableObject = hashMap.requestObjectCopy(null, object);
+								newNames.push(hashMap.getName(newObject));
+							}
+						}
+						
+						// insert new names inside prev names list and save the new name order
+						var args:Array = newNames;
+						newNames.unshift(dropIndex, 0);
+						prevNames.splice.apply(null, args);
+						hashMap.setNameOrder(prevNames);
+					}
+					else if (dynamicObject && items.length > 0)
+					{
+						// only copy the first item in the list
+						dynamicObject.requestLocalObjectCopy(items[0]);
+					}
+				}
+			}
+			
+			// called when something is dragged on top of this list
+			override protected function dragEnterHandler(event:DragEvent):void
+			{
+				if (event.dragSource.hasFormat("items"))
+				{
+					var items:Array = event.dragSource.dataForFormat("items") as Array;
+					if (items[0] is ILinkableObject)
+						DragManager.acceptDragDrop(event.currentTarget as IUIComponent);
+				}
+			}
+			
+			public var defaultDragAction:String = DragManager.COPY;
+			
+			// called when something in this list is dragged and dropped somewhere else
+			override protected function dragCompleteHandler(event:DragEvent):void
+			{
+				if (event.shiftKey)
+					event.action = DragManager.MOVE;
+				else if (event.ctrlKey)
+					event.action = DragManager.COPY;
+				else
+					event.action = defaultDragAction;
+				
+				super.dragCompleteHandler(event);
+				
+				removeObjectsMissingFromDataProvider();
+			}
+			
+			private function getObjectName(item:Object, ..._):String
+			{
+				if (hashMap)
+					return hashMap.getName(item as ILinkableObject);
+				if (dynamicObject)
+					return dynamicObject.globalName;
+				return null;
+			}
+			
 			protected function variableNameChangeHandler(event:DataGridEvent):void
 			{
 				var oldName:String = hashMap.getName(event.itemRenderer.data as ILinkableObject);
 				var grid:DataGrid = event.target as DataGrid;
 				
-				if(grid)
+				if (grid)
 				{
-					var col:int = event.columnIndex;					
-					var newValue:String = String(grid.itemEditorInstance[grid.columns[col].editorDataField]);
+					var col:int = event.columnIndex;
+					var field:String = (grid.columns[col] as DataGridColumn).editorDataField;
+					var newValue:String = grid.itemEditorInstance[field];
 					
-					if(newValue != oldName) {
+					if (hashMap && newValue && hashMap.getNames().indexOf(newValue) < 0)
 						hashMap.renameObject(oldName, newValue);
-					}
+					
+					if (dynamicObject && newValue != dynamicObject.globalName)
+						dynamicObject.globalName = newValue;
 				}
 			}
-			
-			private function nameFunction(item:Object, column:DataGridColumn):String
-			{
-				return hashMap.getName(item as ILinkableObject);
-			}
-						
 		]]>
 	</mx:Script>
 </mx:DataGrid>

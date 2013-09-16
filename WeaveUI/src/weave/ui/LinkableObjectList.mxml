@@ -32,9 +32,8 @@ LinkableObjectList
 		 dragMoveEnabled="true"
 		 allowMultipleSelection="true"
 		 showDataTips="false"
-		 width="100%" 
+		 width="100%" minWidth="0"
 		 labelFunction="getItemLabel"
-		 backgroundAlpha="0.5" borderStyle="inset"
 		 >
 	
 	<mx:Script>
@@ -48,56 +47,43 @@ LinkableObjectList
 			import mx.managers.DragManager;
 			import mx.utils.StringUtil;
 			
-			import weave.api.WeaveAPI;
 			import weave.api.core.ILinkableDynamicObject;
 			import weave.api.core.ILinkableHashMap;
 			import weave.api.core.ILinkableObject;
 			import weave.api.data.IAttributeColumn;
 			import weave.core.CallbackJuggler;
-			import weave.core.SessionManager;
 			import weave.utils.ColumnUtils;
 			
-			// This is a pointer to an existing object map.  Do not create a new private one. 
-			private var _hashMap:ILinkableHashMap = null; // <- do not create a new object map
-			private const hashMapJuggler:CallbackJuggler = new CallbackJuggler(this, refreshLabels, true);
-			private const childListJuggler:CallbackJuggler = new CallbackJuggler(this, updateDataProvider, false);
+			private const _hashMapJuggler:CallbackJuggler = new CallbackJuggler(this, refreshLabels, true);
+			private const _dynamicObjectJuggler:CallbackJuggler = new CallbackJuggler(this, updateDataProvider, true);
+			private const _childListJuggler:CallbackJuggler = new CallbackJuggler(this, updateDataProvider, true);
 			
-			[Inspectable] public function set hashMap(value:ILinkableHashMap):void
-			{
-				_hashMap = value;
-				
-				if (_hashMap)
-					dynamicObject = null;
-				
-				hashMapJuggler.target = _hashMap;
-				childListJuggler.target = _hashMap && _hashMap.childListCallbacks;
-			}
 			public function get hashMap():ILinkableHashMap
 			{
-				if (_hashMap && (WeaveAPI.SessionManager as SessionManager).objectWasDisposed(_hashMap))
-				{
-					hashMap = null;
-				}
-				
-				return _hashMap;
+				return _hashMapJuggler.target as ILinkableHashMap;
 			}
-			
-			private var _dynamicObjectJuggler:CallbackJuggler = new CallbackJuggler(this, updateDataProvider, true);
+			public function set hashMap(value:ILinkableHashMap):void
+			{
+				if (value)
+					dynamicObject = null;
+				
+				_hashMapJuggler.target = value;
+				_childListJuggler.target = value && value.childListCallbacks;
+			}
 			
 			public function get dynamicObject():ILinkableDynamicObject
 			{
 				return _dynamicObjectJuggler.target as ILinkableDynamicObject;
 			}
-
 			public function set dynamicObject(value:ILinkableDynamicObject):void
 			{
-				_dynamicObjectJuggler.target = value;
-				
 				if (value)
 				{
 					hashMap = null;
 					rowCount = 1;
 				}
+				
+				_dynamicObjectJuggler.target = value;
 			}
 			
 			private function refreshLabels():void
@@ -118,14 +104,6 @@ LinkableObjectList
 				}
 				else if (hashMap)
 				{
-					var item:Object = hashMap.childListCallbacks.lastObjectRemoved;
-					if (item)
-					{
-						var renderer:IListItemRenderer = itemToItemRenderer(item);
-						if (renderer)
-							renderer.data = null;
-					}
-					
 					dataProvider = hashMap.getObjects();
 				}
 
@@ -165,6 +143,71 @@ LinkableObjectList
 				}
 			}
 			
+			public function getItemLabel(item:Object, ..._):String
+			{
+				var label:String = "";
+				
+				if(hashMap)
+					label = hashMap.getName(item as ILinkableObject);
+				if(dynamicObject)
+					label = dynamicObject.globalName || getQualifiedClassName(item).split("::")[1];
+				
+				if (item is IAttributeColumn)
+				{
+					var col:IAttributeColumn = item as IAttributeColumn;
+					var title:String = ColumnUtils.getTitle(col);
+					var keyType:String = ColumnUtils.getKeyType(col);
+					var dataType:String = ColumnUtils.getDataType(col);
+					
+					if (dataType && keyType)
+						return StringUtil.substitute("{0} ({1} -> {2})", title, keyType, dataType);
+					if (keyType)
+						return StringUtil.substitute("{0} (Key Type: {1})", title, keyType);
+					if (dataType)
+						return StringUtil.substitute("{0} (Data Type: {1})", title, dataType);
+					
+					return title;
+				}
+				
+				return label;
+			}
+			
+			private function updateHashMapNameOrder():void
+			{
+				validateNow();
+				
+				if (hashMap)
+				{
+					// update object map name order based on what is in the data provider
+					var newNameOrder:Array = [];
+					for (var i:int = 0; i < dataProvider.length; i++)
+					{
+						var object:ILinkableObject = dataProvider[i] as ILinkableObject;
+						if (object)
+							newNameOrder[i] = hashMap.getName(object);
+					}
+					hashMap.setNameOrder(newNameOrder);
+				}
+			}
+			
+			private function removeObjectsMissingFromDataProvider():void
+			{
+				if (hashMap)
+				{
+					var objects:Array = hashMap.getObjects();
+					for each (var object:ILinkableObject in objects)
+					{
+						if(!(this.dataProvider as ArrayCollection).contains(object))
+							hashMap.removeObject(hashMap.getName(object));
+					}
+				}
+				else if(dynamicObject)
+				{
+					if(!(this.dataProvider as ArrayCollection).contains(dynamicObject.internalObject))
+						dynamicObject.removeObject();
+				}
+			}
+
 			// called when something is being dragged on top of this list
 			override protected function dragOverHandler(event:DragEvent):void
 			{
@@ -237,7 +280,7 @@ LinkableObjectList
 				}
 			}
 			
-			[Inspectable] public var defaultDragAction:String = DragManager.COPY;
+			public var defaultDragAction:String = DragManager.COPY;
 			
 			// called when something in this list is dragged and dropped somewhere else
 			override protected function dragCompleteHandler(event:DragEvent):void
@@ -253,90 +296,6 @@ LinkableObjectList
 				
 				removeObjectsMissingFromDataProvider();
 			}
-			
-			// generates a label for an item in the list
-			public function getItemLabel(item:Object):String
-			{
-				var label:String = "";
-				
-				if(hashMap)
-					label = hashMap.getName(item as ILinkableObject);
-				if(dynamicObject)
-					label = dynamicObject.globalName || getQualifiedClassName(item).split("::")[1];
-				
-				if (item is IAttributeColumn)
-				{
-					var col:IAttributeColumn = item as IAttributeColumn;
-					var title:String = ColumnUtils.getTitle(col);
-					var keyType:String = ColumnUtils.getKeyType(col);
-					var dataType:String = ColumnUtils.getDataType(col);
-					
-					if (dataType && keyType)
-						return StringUtil.substitute("{0} ({1} -> {2})", title, keyType, dataType);
-					if (keyType)
-						return StringUtil.substitute("{0} (Key Type: {1})", title, keyType);
-					if (dataType)
-						return StringUtil.substitute("{0} (Data Type: {1})", title, dataType);
-					
-					return title;
-				}
-				
-				return label;
-			}
-			
-			// this function updates the sessioned name order based on what is in the data provider
-			private function updateHashMapNameOrder():void
-			{
-				validateNow();
-				
-				if (hashMap)
-				{
-					// update object map name order based on what is in the data provider
-					var newNameOrder:Array = [];
-					for (var i:int = 0; i < dataProvider.length; i++)
-					{
-						var object:ILinkableObject = dataProvider[i] as ILinkableObject;
-						if (object)
-							newNameOrder[i] = hashMap.getName(object);
-					}
-					hashMap.setNameOrder(newNameOrder);
-				}
-			}
-			// this function removes anything from the session state not appearing in the data provider
-			private function removeObjectsMissingFromDataProvider():void
-			{
-				if (hashMap)
-				{
-					var objects:Array = hashMap.getObjects();
-					for each (var object:ILinkableObject in objects)
-					{
-						if(!(this.dataProvider as ArrayCollection).contains(object))
-							hashMap.removeObject(hashMap.getName(object));
-					}
-				}
-				else if(dynamicObject)
-				{
-					if(!(this.dataProvider as ArrayCollection).contains(dynamicObject.internalObject))
-						dynamicObject.removeObject();
-				}
-			}
-			
-//			private var _deleteShape:SpriteAsset = null;
-//			override protected function createChildren():void
-//			{
-//				super.createChildren();
-//				
-//				_deleteShape = new SpriteAsset();
-//				_deleteShape.addEventListener(MouseEvent.CLICK, minPanelSizeHandler);
-//				super.addChild(_deleteShape);
-//			}
-//			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
-//			{
-//				super.updateDisplayList(unscaledWidth, unscaledHeight);
-//				
-//				_deleteShape.graphics.clear();
-//				_deleteShape.graphics.drawRect(0,0, 50, 50);
-//			}
 		]]>
 	</mx:Script>
 </mx:List>
