@@ -653,16 +653,27 @@
 			public function updateAltText():void
 			{
 				var data:Array = ColumnUtils.joinColumns([plotter.dataX, plotter.dataY], Number);
-				// try linear regression
+				data = data.shift(); // throw away the key column
+				// normalize the data first
 				addAsyncResponder(
-					rService.linearRegression("Linear", data[1], data[2], 1),
-					handleLinearRegressionResult,
-					handleLinearRegressionFault,
-					++requestID
+					rService.normalize(data),
+					function(event:ResultEvent, token:Object=null):void
+					{
+						var data:Array = event.result as Array; // normalized columns
+						// compute linear regression model
+						addAsyncResponder(
+							rService.linearRegression("Linear", data[0], data[1], 1),
+							handleLinearRegressionResult,
+							handleLinearRegressionFault
+						);
+					},
+					function(event:FaultEvent, token:Object = null):void {
+						
+					}
 				);
 				return;
 			}
-			
+
 			private function handleLinearRegressionResult(event:ResultEvent, token:Object=null):void
 			{
 				if (this.requestID != int(token))
@@ -685,7 +696,7 @@
 						temp += lang("The chart has a decreasing trend\n");	
 					}
 
-				altTextEditor.automaticDescription.value = temp;
+				//altTextEditor.automaticDescription.value = temp;
 				getCallbackCollection(this).triggerCallbacks();
 			}
 			
