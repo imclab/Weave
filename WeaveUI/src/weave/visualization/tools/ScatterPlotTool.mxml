@@ -653,7 +653,7 @@
 			public function updateAltText():void
 			{
 				var data:Array = ColumnUtils.joinColumns([plotter.dataX, plotter.dataY], Number);
-				data = data.shift(); // throw away the key column
+				// data = data.shift(); // throw away the key column
 				// normalize the data first
 				addAsyncResponder(
 					rService.normalize(data),
@@ -662,13 +662,14 @@
 						var data:Array = event.result as Array; // normalized columns
 						// compute linear regression model
 						addAsyncResponder(
-							rService.linearRegression("Linear", data[0], data[1], 1),
+							rService.linearRegression("Linear", data[1], data[2], 1),
 							handleLinearRegressionResult,
 							handleLinearRegressionFault
 						);
 					},
 					function(event:FaultEvent, token:Object = null):void {
-						
+						reportError(event);
+						//getCallbackCollection(this).triggerCallbacks();
 					}
 				);
 				return;

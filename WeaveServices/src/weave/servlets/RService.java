@@ -189,6 +189,11 @@ public class RService extends GenericServlet
 		return RServiceUsingRserve.linearRegression( docrootPath, method, dataX, dataY, polynomialDegree);
 	}
 
+	public double[][] normalize(Object[] data) throws RemoteException
+	{
+		return RServiceUsingRserve.normalize( docrootPath, data);
+	}
+
 	public RResult[] kMeansClustering(String[] inputNames, Object[][] inputValues, boolean showWarnings,int numberOfClusters, int iterations) throws Exception
 	{
 		

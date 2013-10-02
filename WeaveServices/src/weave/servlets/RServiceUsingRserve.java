@@ -351,7 +351,7 @@ public class RServiceUsingRserve
 		
 	}
 	
-	public static double[][] normalize(String docrootPath, Object[][] data) throws RemoteException
+	public static double[][] normalize(String docrootPath, Object[] data) throws RemoteException
 	{
 		RConnection rConnection = null;
 		String[] inputNames = {"data"};
