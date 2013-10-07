@@ -135,6 +135,7 @@ angular.module("aws.services").service("scriptobj", ['queryobj', '$rootScope', '
             scope.$safeApply(function () {
                 deferred.resolve(result);
             });
+            console.log(result);
         });
       
         // regardless of when the promise was or will be resolved or rejected,
@@ -144,6 +145,8 @@ angular.module("aws.services").service("scriptobj", ['queryobj', '$rootScope', '
         	return result;
         });
     };
+    
+    
 }]);
 
 angular.module("aws.services").service("dataService", ['$q', '$rootScope', 'queryobj',
