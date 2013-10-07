@@ -13,7 +13,8 @@ angular.module("aws.services", []).service("queryobj", function () {
     this.title = "AlphaQueryObject";
     this.date = new Date();
     this.author = "UML IVPR AWS Team";
-    this.scriptType = "r";
+    this.computationEngine = "r";
+    this.scriptType = "columns"
     this.dataTable = {id:1,title:"default"};
     this.conn = {
         serverType: 'MySQL',
@@ -26,34 +27,16 @@ angular.module("aws.services", []).service("queryobj", function () {
         schema: 'data',
         dsn: 'brfss'
     };
-    this.slideFilter = {values: [10, 25]}
+    var columnCategories = ["geography", "indicators", "byvars", "timeperiods", "analytics"];
     this.setQueryObject = function (jsonObj) {
         if (!jsonObj) {
             return undefined;
         }
-        this.title = jsonObj.title;
-        this.date = jsonObj.data;
-        this.author = jsonObj.author;
-        this.scriptType = jsonObj.scriptType;
-        this.dataTable = jsonObj.dataTable;
-        this.conn = jsonObj.conn;
-        this.selectedVisualization = jsonObj.selectedVisualization;
-        this.barchart = jsonObj.barchart;
-        this.datatable = jsonObj.datatable;
-        this.colorColumn = jsonObj.colorColumn;
-        this.byvars = jsonObj.byvars;
-        this.indicators = jsonObj.indicators;
-        this.geography = jsonObj.geography;
-        this.timeperiods = jsonObj.timeperiods;
-        this.analytics = jsonObj.analytics;
-        this.scriptOptions = jsonObj.scriptOptions;
-        this.scriptSelected = jsonObj.scriptSelected;
-        this.maptool = jsonObj.maptool;
-    };
+        this.q = angular.copy(jsonObj);
+
+    }
     return {
-        //getSlideFilter: this.slideFilterI,
-        //setSlideFilter: function(dat){ this.slideFilterI = dat; return this.slideFilterI;},
-        //q: this,
+        q: this,
         title: this.title,
         date: this.date,
         author: this.author,
@@ -63,6 +46,26 @@ angular.module("aws.services", []).service("queryobj", function () {
         conn: this.conn,
         scriptType: this.scriptType,
         slideFilter: this.slideFilter,
+        getSelectedColumnIds: function(){
+            // loop through the possible column groups
+            // given an id, go get the minimal column object
+            // return that array of objects.
+            var ary = [];
+            var col = ["geography", "indicators", "byvars", "timeperiods", "analytics"];
+            var temp;
+            for (var i =0; i< col.length; i++){
+                if (this[col[i]]){
+                    angular.forEach(this[col[i]], function(item){
+                        if (item.hasOwnProperty('id')){
+                            ary.push(item.id);
+                        } else{
+                            ary.push(item);
+                        }
+                    });
+                }
+            }
+            return ary;
+        },
         getSelectedColumns: function () {
             //TODO hackity hack hack
             var col = ["geography", "indicators", "byvars", "timeperiods", "analytics"];
@@ -268,6 +271,19 @@ angular.module("aws.services").service("dataService", ['$q', '$rootScope', 'quer
                 {
                     return response;
                 });
+            },
+            giveMePrettyColsById: function(ids){
+                return [].reduce(function(x){return x;}, fullColumnObjs.then(function(response){
+                    response.forEach(function(item){
+                    if (ids.indexOf(item.id)){
+                        return { id: item.id,
+                            title: item.publicMetadata.title,
+                            range: item.publicMetadata.var_range,
+                            var_type: item.publicMetadata.ui_type,
+                            var_label: item.publicMetadata.var_label
+                        };
+                    }});
+                }));
             }
         };
     }]);
