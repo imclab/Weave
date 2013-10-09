@@ -265,90 +265,138 @@ angular.module("aws.panelControllers", [])
 	
 })
 .controller("ScriptOptionsPanelCtrl", function($scope, queryobj, scriptobj, dataService){
+	$scope.inputs = []; // script inputs
+	$scope.options= []; // selected columns
+	$scope.show = []; // array corresponding to number of inputs Show filter or not.
+	$scope.sliderOptions = [] // array corresponding to settings for visible sliders
+	$scope.selection = []; // array corresponding to inputs, which option is selected. 
+	$scope.type = "columns"; // or "cluster" to decide which UI to draw in panel
 	
-	// Populate Labels
-	$scope.inputs = [];
-	var sliderDefault = {
-	        showLabel: true,
-			range: true,
-			//max/min: querobj['some property']
-			max: 99,
-			min: 1,
-			values: [10,25]
-	};
-	$scope.sliderOptions = [];
-	var ids = queryobj.getSelectedColumnIds();
-    $scope.options = dataService.giveMePrettyColsById(ids);
-	$scope.selection = [];
-	$scope.show = [];
-	$scope.type = "columns";
-	$scope.clusterOptions={};
 	
-	// retrieve selections, else create blanks;
-	if(queryobj['scriptOptions']){
-		$scope.selection = queryobj['scriptOptions'];
-	}
-
-	var buildScriptOptions = function(){
-		var arr = [];
-		var obj;
-		angular.forEach($scope.selection, function(item, i){
-			obj = "";
-			if(item != ""){
-				item = angular.fromJson(item);
-			
-				obj = {
-						id:item.id,
-						title:item.title
-				};
-				if(item.range){
-					obj.filter = [$scope.sliderOptions[i].values];
-				}
-			}
-			arr.push(obj);
-		});
-		return arr;
-	};
-	
-	var setSliderOptions = function(index){
-		//get selection that changed
-		var selec = angular.fromJson($scope.selection[index]);
-		selec.range = angular.fromJson(selec.range);
-		var curr = angular.fromJson($scope.sliderOptions[index]);
-		if(selec.range != []){
-			curr.values = selec.range;
-			curr.min = selec.range[0];
-			curr.max = selec.range[1];
-			$scope.sliderOptions[index] = curr;
-		}
-	};
-	
-	// set up watch functions
-	$scope.$watch('selection', function(newVal,oldVal){
-		//for(i = 0; i < newVal.length; i++){$scope.setRange(i);}
-		angular.forEach(newVal, function(item, i){
-			if(item === oldVal[i]){
-				//do nothing since they didn't change
-			}else{
-				//update the whole slider settings. 
-				setSliderOptions(i);
-				$scope.show[i] = true;
-			}
-		});
-		queryobj.scriptOptions = buildScriptOptions();
-	}, true);
-	$scope.$watch(function(){
-		return queryobj.scriptSelected;
-	},function(newVal, oldVal){
-		$scope.inputs = scriptobj.getScriptMetadata().inputs;
-
-		angular.forEach($scope.inputs, function(input, index){
-			$scope.selection[index] = "";
-			$scope.sliderOptions[index] = angular.copy(sliderDefault);
-			$scope.show[index] = false;
-		});
-		
+	$scope.inputs = scriptobj.getScriptInputs();  // get a promise for metadata
+	$scope.options = dataService.getSelectedColumns(); // get array of selected columns									
+	angular.forEach($scope.inputs, function(item, i){ // initialize show and selection with defaults
+		$scope.show[i] = false;
+		$scope.selection[i] = "";
+		$scope.sliderOptions[i] = {values:[1,10]};
 	});
+	$scope.$watch(function(){		// watch the selected script for changes
+			return queryobj.scriptSelected;
+		},function(newVal, oldVal){   	
+			var meta = scriptobj.getScriptMetadata(); 	// grab new inputs 
+			meta.then(function(result){			// reinitialize and apply to model
+				$scope.inputs = result.inputs;
+				angular.forEach(result.inputs, function(input, index){
+					$scope.show[index] = false;
+					$scope.selection[index] = "";
+					$scope.sliderOptions[index] = {values:[1,10]};
+			});
+			return result;
+		});
+	});
+	$scope.$watch('selection', function(newVal, oldVal){
+		// new and old will be arrays with objects in them (columns returned from getSelectedColumns()
+        var te = newVal;
+		if(angular.toJson(newVal) != angular.toJson(oldVal)){
+			angular.forEach(newVal, function(selected, i){
+				if (selected){
+					$scope.sliderOptions[i] = // try out a closure to set the options model.
+						function(){ var obj = {
+							id:selected.id,
+							title:selected.title,
+							filter:[selected.range]};
+							return obj;
+						}();
+					$scope.show[i] = true;
+				}
+			});
+			queryobj.scriptOptions = $scope.selection;
+		}
+	});
+	
+//	// Populate Labels
+//	$scope.inputs = [];
+//	var sliderDefault = {
+//	        showLabel: true,
+//			range: true,
+//			//max/min: querobj['some property']
+//			max: 99,
+//			min: 1,
+//			values: [10,25]
+//	};
+//	$scope.sliderOptions = [];
+//	var ids = queryobj.getSelectedColumnIds();
+//    $scope.options = dataService.giveMePrettyColsById(ids);
+//	$scope.selection = [];
+//	$scope.show = [];
+//	$scope.type = "columns";
+//	$scope.clusterOptions={};
+//	
+//	// retrieve selections, else create blanks;
+//	if(queryobj['scriptOptions']){
+//		$scope.selection = queryobj['scriptOptions'];
+//	}
+//
+//	var buildScriptOptions = function(){
+//		var arr = [];
+//		var obj;
+//		angular.forEach($scope.selection, function(item, i){
+//			obj = "";
+//			if(item != ""){
+//				item = angular.fromJson(item);
+//			
+//				obj = {
+//						id:item.id,
+//						title:item.title
+//				};
+//				if(item.range){
+//					obj.filter = [$scope.sliderOptions[i].values];
+//				}
+//			}
+//			arr.push(obj);
+//		});
+//		return arr;
+//	};
+//	
+//	var setSliderOptions = function(index){
+//		//get selection that changed
+//		var selec = angular.fromJson($scope.selection[index]);
+//		selec.range = angular.fromJson(selec.range);
+//		var curr = angular.fromJson($scope.sliderOptions[index]);
+//		if(selec.range != []){
+//			curr.values = selec.range;
+//			curr.min = selec.range[0];
+//			curr.max = selec.range[1];
+//			$scope.sliderOptions[index] = curr;
+//		}
+//	};
+//	
+//	// set up watch functions
+//	$scope.$watch('selection', function(newVal,oldVal){
+//		//for(i = 0; i < newVal.length; i++){$scope.setRange(i);}
+//		angular.forEach(newVal, function(item, i){
+//			if(item === oldVal[i]){
+//				//do nothing since they didn't change
+//			}else{
+//				//update the whole slider settings. 
+//				setSliderOptions(i);
+//				$scope.show[i] = true;
+//			}
+//		});
+//		queryobj.scriptOptions = buildScriptOptions();
+//	}, true);
+//	$scope.$watch(function(){
+//		return queryobj.scriptSelected;
+//	},function(newVal, oldVal){
+//		$scope.inputs = scriptobj.getScriptMetadata().inputs;
+//
+//		angular.forEach($scope.inputs, function(input, index){
+//			$scope.selection[index] = "";
+//			$scope.sliderOptions[index] = angular.copy(sliderDefault);
+//			$scope.show[index] = false;
+//		});
+//		
+//	});
 })
 .controller("RDBPanelCtrl", function($scope, queryobj){
 	if(queryobj["conn"]){

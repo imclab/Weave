@@ -116,9 +116,7 @@ angular.module("aws.services").service("scriptobj", ['queryobj', '$rootScope', '
         // regardless of when the promise was or will be resolved or rejected,
         // then calls one of the success or error callbacks asynchronously as soon as the result
         // is available. The callbacks are called with a single argument: the result or rejection reason.
-        return deferred.promise.then(function(result){
-        	return result;
-        });
+        return deferred.promise;
     };
     
     /**
@@ -141,10 +139,17 @@ angular.module("aws.services").service("scriptobj", ['queryobj', '$rootScope', '
         // regardless of when the promise was or will be resolved or rejected,
  	    // then calls one of the success or error callbacks asynchronously as soon as the result
      	// is available. The callbacks are called with a single argument: the result or rejection reason.
-        return deferred.promise.then(function(result){
-        	return result;
-        });
+        return deferred.promise;
     };
+    var localmetadata = this.getScriptMetadata();
+    this.getScriptInputs = function(){
+    	var locdef = this.getScriptMetadata(); 
+    	locdef.then(function(result){
+    		return result.inputs
+    	});	
+    	return locdef;
+    };
+    
     
     
 }]);
@@ -274,6 +279,25 @@ angular.module("aws.services").service("dataService", ['$q', '$rootScope', 'quer
                 {
                     return response;
                 });
+            },
+            getSelectedColumns: function(){
+            	var cols = queryobj.getSelectedColumnIds();
+            	var arr = [];
+            	return fullColumnObjs.then(function(result){
+	            	angular.forEach(result, function(item, i){
+	            		var c = cols.indexOf(item.id);
+	            		if (c >= 0){
+	            			var col = { id: item.id,
+				                        title: item.publicMetadata.title,
+				                        range: item.publicMetadata.var_range,
+				                        var_type: item.publicMetadata.ui_type,
+				                        var_label: item.publicMetadata.var_label };
+	            			arr.push(col);
+	            		}
+	            	});
+                    return arr;
+            	})
+            	
             },
             giveMePrettyColsById: function(ids){
                 return [].reduce(function(x){return x;}, fullColumnObjs.then(function(response){
