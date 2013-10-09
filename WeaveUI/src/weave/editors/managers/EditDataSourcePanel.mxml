@@ -31,23 +31,24 @@
 	creationComplete="handleCreationComplete()" xmlns:ui="weave.ui.*">
 	<mx:VBox width="100%" height="100%" verticalGap="0">
 		<mx:HBox height="100%" width="100%" horizontalGap="0">
-			<mx:List id="sourceList"
-					 change="handleSourceSelect()"
-					 borderThickness="0"
-					 minHeight="0"
-					 height="100%"
-					 initialize="UIUtils.setPadding(sourceList, padding)"
-					 dataProvider="{sources}"
-					 labelFunction="getLabel"/>
+			<mx:VBox height="100%">
+				<mx:List id="sourceList"
+						 change="handleSourceSelect()"
+						 minHeight="0"
+						 height="100%"
+						 initialize="UIUtils.setPadding(sourceList, padding)"
+						 dataProvider="{sources}"
+						 labelFunction="getLabel"/>
+				<mx:Button label="{lang('New data source...')}" click="addSource()"/>
+				<mx:Button label="{lang('Remove selected')}" click="removeSelected()"/>
+			</mx:VBox>
 			<mx:Canvas backgroundColor="#939178" width="{padding}" height="100%"/>
 			<mx:Box id="container" minWidth="0" minHeight="0" width="100%" height="100%" initialize="UIUtils.setPadding(container, padding)"/>
 		</mx:HBox>
 		<mx:HBox paddingTop="{padding}" paddingBottom="{padding}" width="100%" backgroundColor="#939178">
-			<mx:Button label="{lang('New data source...')}" click="addSource()"/>
-			<mx:Button label="{lang('Remove selected')}" click="removeSelected()"/>
 			<mx:Spacer width="100%"/>
 			<mx:Button label="{lang('Apply changes')}" click="save()"/>
-			<mx:Button label="{lang('Close')}" click="removePanel()"/>
+			<mx:Button label="{lang('Cancel')}" click="removePanel()"/>
 		</mx:HBox>
 	</mx:VBox>
 		

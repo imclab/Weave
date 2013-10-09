@@ -28,14 +28,14 @@
 	borderColor="#939178"
 	borderThicknessLeft="{padding}" borderThicknessRight="{padding}"
 	roundedBottomCorners="true"
-	creationComplete="handleDataSelect()" xmlns:ui="weave.ui.*">
+	xmlns:ui="weave.ui.*">
 	<mx:VBox width="100%" height="100%" verticalGap="0">
 		<mx:HBox height="100%" width="100%" horizontalGap="0">
 			<mx:VBox minHeight="0" height="100%"
 					 horizontalScrollPolicy="off"
 					 initialize="UIUtils.setPadding(event.target as UIComponent, padding)">
 				<mx:RadioButtonGroup id="dataSourceType" itemClick="handleDataSelect(event)"/>
-				<mx:RadioButton selected="true" groupName="dataSourceType" id="csvSource" value="{CSVDataSource}" label="{lang('CSV Data Source')}"/>
+				<mx:RadioButton groupName="dataSourceType" id="csvSource" value="{CSVDataSource}" label="{lang('CSV Data Source')}"/>
 				<mx:RadioButton groupName="dataSourceType" id="wfsSource" value="{WFSDataSource}" label="{lang('WFS Data Source')}"/>
 				<mx:RadioButton groupName="dataSourceType" id="dbfSource" value="{DBFDataSource}" label="{lang('DBF Data Source')}"/>
 				<mx:RadioButton groupName="dataSourceType" id="xlsSource" value="{XLSDataSource}" label="{lang('XLS Data Source')}"/>
